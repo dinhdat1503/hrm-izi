@@ -1,18 +1,31 @@
-﻿import { Navigate, Route, Routes } from "react-router-dom";
-import { AdminShell } from "../features/admin/shell/ui/AdminShell";
+﻿import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
+import { useAuth } from "../features/auth/useAuth";
+import { LoginPage } from "../features/auth/ui/LoginPage";
+import { ForgotPasswordPage } from "../features/auth/ui/ForgotPasswordPage";
+import { AdminShell } from "./layouts/AdminShell";
 import { UsersPage } from "../features/admin/users/ui/UsersPage";
+import { AccountPage } from "../features/account/ui/AccountPage";
 
-// Nếu bạn đã có trang login/forgot thì mở import này lên và thêm routes tương ứng
-// import { LoginPage } from "../features/auth/ui/LoginPage";
-// import { ForgotPasswordPage } from "../features/auth/ui/ForgotPasswordPage";
+function RequireAuth() {
+  const { state } = useAuth();
+  const loc = useLocation();
+  if (state.loading) return null;
+  if (!state.isAuthed) return <Navigate to="/login" replace state={{ from: loc }} />;
+  return <Outlet />;
+}
+
+function RequireAdmin() {
+  const { state } = useAuth();
+  if (!state.user) return <Navigate to="/login" replace />;
+  if (state.user.role !== "ADMIN") return <Navigate to="/account" replace />;
+  return <Outlet />;
+}
 
 function Placeholder({ title, desc }: { title: string; desc?: string }) {
   return (
-    <div className="rounded-2xl border border-gray-100 p-5">
-      <div className="font-semibold">{title}</div>
-      <div className="text-sm text-gray-500 mt-1">
-        {desc || "Trang đang được phát triển..."}
-      </div>
+    <div className="rounded-2xl bg-white border border-gray-100 shadow-sm p-6">
+      <div className="text-xl font-semibold">{title}</div>
+      <div className="text-sm text-gray-500 mt-1">{desc || "Chưa triển khai (placeholder)"}</div>
     </div>
   );
 }
@@ -20,38 +33,23 @@ function Placeholder({ title, desc }: { title: string; desc?: string }) {
 export function AppRoutes() {
   return (
     <Routes>
-      {/* Trang mặc định */}
-      <Route path="/" element={<Navigate to="/admin/users" replace />} />
-
-      {/* Admin layout + nested pages */}
-      <Route path="/admin" element={<AdminShell />}>
-        <Route index element={<Navigate to="/admin/users" replace />} />
-        <Route path="users" element={<UsersPage embedded />} />
-        <Route
-          path="roles"
-          element={<Placeholder title="Vai trò & phân quyền" desc="Quản lý role/permission" />}
-        />
-        <Route
-          path="departments"
-          element={<Placeholder title="Phòng ban" desc="CRUD phòng ban" />}
-        />
-        <Route
-          path="titles"
-          element={<Placeholder title="Chức vụ" desc="CRUD chức vụ/chức danh" />}
-        />
-        <Route
-          path="settings"
-          element={<Placeholder title="Cài đặt hệ thống" desc="Cấu hình chung" />}
-        />
-      </Route>
-
-      {/* Auth (tuỳ bạn bật) */}
-      {/*
       <Route path="/login" element={<LoginPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-      */}
 
-      {/* Not found */}
+      <Route element={<RequireAuth />}>
+        <Route path="/account" element={<AccountPage />} />
+
+        <Route element={<RequireAdmin />}>
+          <Route path="/admin" element={<AdminShell />}>
+            <Route path="users" element={<UsersPage />} />
+            <Route path="roles" element={<Placeholder title="Quản lý vai trò" />} />
+            <Route path="settings" element={<Placeholder title="Cài đặt hệ thống" />} />
+            <Route index element={<Navigate to="/admin/users" replace />} />
+          </Route>
+        </Route>
+      </Route>
+
+      <Route path="/" element={<Navigate to="/admin/users" replace />} />
       <Route path="*" element={<Navigate to="/admin/users" replace />} />
     </Routes>
   );

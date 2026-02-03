@@ -1,75 +1,78 @@
-import { useEffect, useMemo, useState } from "react";
-import { LocalUserRepository } from "../data/LocalUserRepository";
-import { ListUsers } from "../domain/usecases/ListUsers";
-import { CreateUser } from "../domain/usecases/CreateUser";
-import { UpdateUser } from "../domain/usecases/UpdateUser";
-import { DeleteUser } from "../domain/usecases/DeleteUser";
-import type { User } from "../domain/User";
-import type { CreateUserInput } from "../domain/UserRepository";
+﻿import { useEffect, useMemo, useState } from "react";
+import type { Role, Status, User } from "../domain/types";
+import { LocalUsersRepository } from "../data/LocalUsersRepository";
+import { makeUsersUsecases } from "../domain/usecases";
 
-type State = { loading: boolean; error?: string; ok?: string };
+type Toast = { type: "ok" | "err"; msg: string } | null;
 
 export function useUsers() {
-  const repo = useMemo(() => new LocalUserRepository(), []);
-  const listUC = useMemo(() => new ListUsers(repo), [repo]);
-  const createUC = useMemo(() => new CreateUser(repo), [repo]);
-  const updateUC = useMemo(() => new UpdateUser(repo), [repo]);
-  const deleteUC = useMemo(() => new DeleteUser(repo), [repo]);
+  const repo = useMemo(() => new LocalUsersRepository(), []);
+  const uc = useMemo(() => makeUsersUsecases(repo), [repo]);
 
   const [users, setUsers] = useState<User[]>([]);
-  const [state, setState] = useState<State>({ loading: true });
+  const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState<Toast>(null);
 
-  const refresh = async () => {
-    try {
-      setState({ loading: true });
-      const rows = await listUC.exec();
-      setUsers(rows);
-      setState({ loading: false });
-    } catch (e: any) {
-      setState({ loading: false, error: e?.message || "Không tải được danh sách" });
-    }
+  const showToast = (type: "ok" | "err", msg: string) => {
+    setToast({ type, msg });
+    setTimeout(() => setToast(null), 1800);
   };
 
   useEffect(() => {
-    refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    (async () => {
+      try {
+        setLoading(true);
+        const data = await uc.list();
+        setUsers(data);
+      } catch (e: any) {
+        showToast("err", e?.message || "Không tải được danh sách user");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [uc]);
 
-  const createUser = async (input: CreateUserInput) => {
+  const create = async (input: Omit<User, "id" | "createdAt">) => {
     try {
-      setState({ loading: true });
-      await createUC.exec(input);
-      setState({ loading: false, ok: "Đã tạo người dùng" });
-      await refresh();
-      setTimeout(() => setState((s) => ({ ...s, ok: undefined })), 1500);
+      const next = await uc.create(input);
+      setUsers((prev) => [next, ...prev]);
+      showToast("ok", "Đã tạo người dùng");
     } catch (e: any) {
-      setState({ loading: false, error: e?.message || "Tạo thất bại" });
+      showToast("err", e?.message || "Tạo thất bại");
+      throw e;
     }
   };
 
-  const updateUser = async (u: User, input: any) => {
+  const update = async (input: Omit<User, "createdAt">) => {
     try {
-      setState({ loading: true });
-      await updateUC.exec(u, input);
-      setState({ loading: false, ok: "Đã cập nhật" });
-      await refresh();
-      setTimeout(() => setState((s) => ({ ...s, ok: undefined })), 1500);
+      const updated = await uc.update(input);
+      setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
+      showToast("ok", "Đã cập nhật người dùng");
     } catch (e: any) {
-      setState({ loading: false, error: e?.message || "Cập nhật thất bại" });
+      showToast("err", e?.message || "Cập nhật thất bại");
+      throw e;
     }
   };
 
-  const deleteUser = async (id: string) => {
+  const remove = async (id: string) => {
     try {
-      setState({ loading: true });
-      await deleteUC.exec(id);
-      setState({ loading: false, ok: "Đã xoá" });
-      await refresh();
-      setTimeout(() => setState((s) => ({ ...s, ok: undefined })), 1500);
+      await uc.remove(id);
+      setUsers((prev) => prev.filter((u) => u.id !== id));
+      showToast("ok", "Đã xoá người dùng");
     } catch (e: any) {
-      setState({ loading: false, error: e?.message || "Xoá thất bại" });
+      showToast("err", e?.message || "Xoá thất bại");
     }
   };
 
-  return { users, state, refresh, createUser, updateUser, deleteUser };
+  const reset = async () => {
+    try {
+      const data = await uc.reset();
+      setUsers(data);
+      showToast("ok", "Đã reset dữ liệu");
+    } catch (e: any) {
+      showToast("err", e?.message || "Reset thất bại");
+    }
+  };
+
+  return { users, loading, toast, create, update, remove, reset };
 }
