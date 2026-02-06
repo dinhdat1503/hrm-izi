@@ -29,7 +29,7 @@ function demoValidate(email: string, password: string): AuthUser | null {
   // Demo account (bạn có thể đổi)
   if (e === "demo@gmail.com" && p === "123456") {
     return { id: "u_001", email: e, fullName: "Ngô Đình Đạt", role: "ADMIN" };
-  }
+  } 
   return null;
 }
 
